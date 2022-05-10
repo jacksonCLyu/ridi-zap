@@ -50,7 +50,7 @@ func (z *zapLogger) Trace(args ...any) {
 }
 
 func (z *zapLogger) Tracef(format string, args ...any) {
-	z.logger.Sugar().Debugf(format, args)
+	z.logger.Sugar().Debugf(format, args...)
 }
 
 func (z *zapLogger) Debug(args ...any) {
@@ -58,7 +58,7 @@ func (z *zapLogger) Debug(args ...any) {
 }
 
 func (z *zapLogger) Debugf(format string, args ...any) {
-	z.logger.Sugar().Debugf(format, args)
+	z.logger.Sugar().Debugf(format, args...)
 }
 
 func (z *zapLogger) Info(args ...any) {
@@ -66,7 +66,7 @@ func (z *zapLogger) Info(args ...any) {
 }
 
 func (z *zapLogger) Infof(format string, args ...any) {
-	z.logger.Sugar().Infof(format, args)
+	z.logger.Sugar().Infof(format, args...)
 }
 
 func (z *zapLogger) Warn(args ...any) {
@@ -74,7 +74,7 @@ func (z *zapLogger) Warn(args ...any) {
 }
 
 func (z *zapLogger) Warnf(format string, args ...any) {
-	z.logger.Sugar().Warnf(format, args)
+	z.logger.Sugar().Warnf(format, args...)
 }
 
 func (z *zapLogger) Error(args ...any) {
@@ -82,7 +82,7 @@ func (z *zapLogger) Error(args ...any) {
 }
 
 func (z *zapLogger) Errorf(format string, args ...any) {
-	z.logger.Sugar().Errorf(format, args)
+	z.logger.Sugar().Errorf(format, args...)
 }
 
 func (z *zapLogger) Fatal(args ...any) {
@@ -90,7 +90,7 @@ func (z *zapLogger) Fatal(args ...any) {
 }
 
 func (z *zapLogger) Fatalf(format string, args ...any) {
-	z.logger.Sugar().Fatalf(format, args)
+	z.logger.Sugar().Fatalf(format, args...)
 }
 
 type zapLogger struct {
@@ -103,8 +103,11 @@ func ZapLogger(opts ...Option) logger.Logger {
 		level:       zap.NewAtomicLevel(),
 		refPath:     "app",
 		category:    "app",
+		caller:      true,
+		callerSkip:  2,
 		isLocalTime: true,
 		isCompress:  false,
+		isSampling:  true,
 	}
 	for _, opt := range opts {
 		opt.apply(options)
@@ -119,23 +122,6 @@ func ZapLogger(opts ...Option) logger.Logger {
 		//encoder = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 		encoder = zapcore.NewJSONEncoder(NewCustomProductionEncoderConfig())
 	}
-
-	// 抽样配置
-	var samplingOption *zap.Option = nil
-	samplingConfig := &zap.SamplingConfig{
-		Initial:    100,
-		Thereafter: 100,
-	}
-	zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		var samplerOpts []zapcore.SamplerOption
-		return zapcore.NewSamplerWithOptions(
-			core,
-			time.Second,
-			samplingConfig.Initial,
-			samplingConfig.Thereafter,
-			samplerOpts...,
-		)
-	})
 
 	// 日志文件配置
 	fileName := filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.refPath, strings.Join([]string{options.category, DefaultLogFileSuffix}, "."))
@@ -155,15 +141,39 @@ func ZapLogger(opts ...Option) logger.Logger {
 		options.level, // 允许输出的日志级别
 	)
 
+	// 构造选项
+	zOpts := make([]zap.Option, 0, 3)
+
 	// 开启行号
-	caller := zap.AddCaller()
-	callerSkip := zap.AddCallerSkip(2)
-	// 构造日志对象
-	logger := zap.New(core, caller, callerSkip)
-	if samplingOption != nil {
-		logger.WithOptions(*samplingOption)
+	if options.caller {
+		caller := zap.AddCaller()
+		zOpts = append(zOpts, caller)
+		callerSkip := zap.AddCallerSkip(2)
+		zOpts = append(zOpts, callerSkip)
 	}
-	return &zapLogger{logger: logger}
+
+	// 日志采样
+	if options.isSampling {
+		samplingConfig := &zap.SamplingConfig{
+			Initial:    100,
+			Thereafter: 100,
+		}
+		wrapCore := zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			var samplerOpts []zapcore.SamplerOption
+			return zapcore.NewSamplerWithOptions(
+				core,
+				time.Second,
+				samplingConfig.Initial,
+				samplingConfig.Thereafter,
+				samplerOpts...,
+			)
+		})
+		zOpts = append(zOpts, wrapCore)
+	}
+
+	// 构造日志对象
+	l := zap.New(core, zOpts...)
+	return &zapLogger{logger: l}
 }
 
 // NewCustomStdoutEncoderConfig return a custom zapcore encoder config

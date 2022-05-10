@@ -11,8 +11,11 @@ type options struct {
 	level       zap.AtomicLevel
 	refPath     string
 	category    string
+	caller 	 bool
+	callerSkip int
 	isLocalTime bool
 	isCompress  bool
+	isSampling  bool
 }
 
 // ApplyFunc zap logger options apply func
@@ -43,6 +46,27 @@ func WithCategory(category string) Option {
 	})
 }
 
+// AddCaller return logger with caller
+func AddCaller() Option {
+	return ApplyFunc(func(zapOpts *options) {
+		zapOpts.caller = true
+	})
+}
+
+// WithCaller return logger with caller option
+func WithCaller(caller bool) Option {
+	return ApplyFunc(func(zapOpts *options) {
+		zapOpts.caller = caller
+	})
+}
+
+// WithCallerSkip return logger with caller skip
+func WithCallerSkip(skip int) Option {
+	return ApplyFunc(func(zapOpts *options) {
+		zapOpts.callerSkip = skip
+	})
+}
+
 // LocalDateTime return logger with localDateTime
 func LocalDateTime(is bool) Option {
 	return ApplyFunc(func(zapOpts *options) {
@@ -54,5 +78,12 @@ func LocalDateTime(is bool) Option {
 func Compress(is bool) Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.isCompress = is
+	})
+}
+
+// Sampling return logger if sampling needed
+func Sampling(is bool) Option {
+	return ApplyFunc(func(zapOpts *options) {
+		zapOpts.isSampling = is
 	})
 }
