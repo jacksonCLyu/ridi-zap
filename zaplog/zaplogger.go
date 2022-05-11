@@ -46,7 +46,7 @@ const (
 var _ logger.Logger = (*zapLogger)(nil)
 
 func (z *zapLogger) Trace(args ...any) {
-	z.logger.Debug("trace", zap.Any("args", args))
+	z.logger.Sugar().Debug(args...)
 }
 
 func (z *zapLogger) Tracef(format string, args ...any) {
@@ -54,7 +54,7 @@ func (z *zapLogger) Tracef(format string, args ...any) {
 }
 
 func (z *zapLogger) Debug(args ...any) {
-	z.logger.Debug("debug", zap.Any("args", args))
+	z.logger.Sugar().Debug(args...)
 }
 
 func (z *zapLogger) Debugf(format string, args ...any) {
@@ -62,7 +62,7 @@ func (z *zapLogger) Debugf(format string, args ...any) {
 }
 
 func (z *zapLogger) Info(args ...any) {
-	z.logger.Info("info", zap.Any("args", args))
+	z.logger.Sugar().Info(args...)
 }
 
 func (z *zapLogger) Infof(format string, args ...any) {
@@ -70,7 +70,7 @@ func (z *zapLogger) Infof(format string, args ...any) {
 }
 
 func (z *zapLogger) Warn(args ...any) {
-	z.logger.Warn("warn", zap.Any("args", args))
+	z.logger.Sugar().Warn(args...)
 }
 
 func (z *zapLogger) Warnf(format string, args ...any) {
@@ -78,7 +78,7 @@ func (z *zapLogger) Warnf(format string, args ...any) {
 }
 
 func (z *zapLogger) Error(args ...any) {
-	z.logger.Error("error", zap.Any("args", args))
+	z.logger.Sugar().Error(args...)
 }
 
 func (z *zapLogger) Errorf(format string, args ...any) {
@@ -86,7 +86,7 @@ func (z *zapLogger) Errorf(format string, args ...any) {
 }
 
 func (z *zapLogger) Fatal(args ...any) {
-	z.logger.Fatal("fatal", zap.Any("args", args))
+	z.logger.Sugar().Fatal(args...)
 }
 
 func (z *zapLogger) Fatalf(format string, args ...any) {
