@@ -120,7 +120,7 @@ func ZapLogger(opts ...Option) logger.Logger {
 		encoder = zapcore.NewConsoleEncoder(NewCustomStdoutEncoderConfig())
 	} else {
 		//encoder = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
-		encoder = zapcore.NewJSONEncoder(NewCustomProductionEncoderConfig())
+		encoder = zapcore.NewConsoleEncoder(NewCustomProductionEncoderConfig())
 	}
 
 	// 日志文件配置
@@ -206,10 +206,10 @@ func NewCustomProductionEncoderConfig() zapcore.EncoderConfig {
 		FunctionKey:    zapcore.OmitKey,
 		StacktraceKey:  StacktraceKey,
 		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalLevelEncoder,    // 大写编码器
-		EncodeTime:     zapcore.ISO8601TimeEncoder,     // ISO8601 UTC 时间格式
-		EncodeDuration: zapcore.SecondsDurationEncoder, // second duration encoder
-		EncodeCaller:   zapcore.ShortCallerEncoder,     // 短路径编码器(相对路径 + 行号)
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder, // 大写编码器
+		EncodeTime:     zapcore.ISO8601TimeEncoder,       // ISO8601 UTC 时间格式
+		EncodeDuration: zapcore.SecondsDurationEncoder,   // second duration encoder
+		EncodeCaller:   zapcore.ShortCallerEncoder,       // 短路径编码器(相对路径 + 行号)
 		EncodeName:     zapcore.FullNameEncoder,
 	}
 }
