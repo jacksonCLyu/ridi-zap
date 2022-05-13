@@ -106,7 +106,7 @@ func ZapLogger(opts ...Option) logger.Logger {
 		caller:      true,
 		callerSkip:  2,
 		isLocalTime: true,
-		isCompress:  false,
+		isCompress:  true,
 		isSampling:  true,
 	}
 	for _, opt := range opts {
@@ -148,7 +148,7 @@ func ZapLogger(opts ...Option) logger.Logger {
 	if options.caller {
 		caller := zap.AddCaller()
 		zOpts = append(zOpts, caller)
-		callerSkip := zap.AddCallerSkip(2)
+		callerSkip := zap.AddCallerSkip(options.callerSkip)
 		zOpts = append(zOpts, callerSkip)
 	}
 

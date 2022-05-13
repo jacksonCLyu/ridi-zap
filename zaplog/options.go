@@ -11,8 +11,8 @@ type options struct {
 	level       zap.AtomicLevel
 	refPath     string
 	category    string
-	caller 	 bool
-	callerSkip int
+	caller      bool
+	callerSkip  int
 	isLocalTime bool
 	isCompress  bool
 	isSampling  bool
@@ -43,6 +43,9 @@ func WithRefPath(logRefPath string) Option {
 func WithCategory(category string) Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.category = category
+		if zapOpts.refPath == "" {
+			zapOpts.refPath = category
+		}
 	})
 }
 
