@@ -8,14 +8,15 @@ type Option interface {
 }
 
 type options struct {
-	level       zap.AtomicLevel
-	refPath     string
-	category    string
-	caller      bool
-	callerSkip  int
-	isLocalTime bool
-	isCompress  bool
-	isSampling  bool
+	level           zap.AtomicLevel
+	refPath         string
+	category        string
+	caller          bool
+	callerSkip      int
+	stackTraceLevel zap.AtomicLevel
+	isLocalTime     bool
+	isCompress      bool
+	isSampling      bool
 }
 
 // ApplyFunc zap logger options apply func
@@ -50,6 +51,8 @@ func WithCategory(category string) Option {
 }
 
 // AddCaller return logger with caller
+// caller is a bool option that determines whether the line number of the caller
+// is logged.
 func AddCaller() Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.caller = true
@@ -57,6 +60,8 @@ func AddCaller() Option {
 }
 
 // WithCaller return logger with caller option
+// caller is a bool option that determines whether the line number of the caller
+// is logged. The default is true.
 func WithCaller(caller bool) Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.caller = caller
@@ -64,9 +69,20 @@ func WithCaller(caller bool) Option {
 }
 
 // WithCallerSkip return logger with caller skip
+// callerSkip is the number of stack frames to ascend, starting from zaplogger.go.
+// The default is 1.
 func WithCallerSkip(skip int) Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.callerSkip = skip
+	})
+}
+
+// WithStackTraceLevel return logger with stackTraceLevel
+// stackTraceLevel is used to determine whether to include stack trace in the log output.
+// The default is ErrorLevel.
+func WithStackTraceLevel(level zap.AtomicLevel) Option {
+	return ApplyFunc(func(zapOpts *options) {
+		zapOpts.stackTraceLevel = level
 	})
 }
 

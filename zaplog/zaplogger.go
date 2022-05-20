@@ -100,14 +100,15 @@ type zapLogger struct {
 // ZapLogger returns a new zap logger.
 func ZapLogger(opts ...Option) logger.Logger {
 	options := &options{
-		level:       zap.NewAtomicLevel(),
-		refPath:     "app",
-		category:    "app",
-		caller:      true,
-		callerSkip:  2,
-		isLocalTime: true,
-		isCompress:  true,
-		isSampling:  true,
+		level:           zap.NewAtomicLevel(),
+		refPath:         "app",
+		category:        "app",
+		caller:          true,
+		callerSkip:      1,
+		stackTraceLevel: zap.NewAtomicLevelAt(zap.ErrorLevel),
+		isLocalTime:     true,
+		isCompress:      true,
+		isSampling:      true,
 	}
 	for _, opt := range opts {
 		opt.apply(options)
@@ -150,6 +151,11 @@ func ZapLogger(opts ...Option) logger.Logger {
 		zOpts = append(zOpts, caller)
 		callerSkip := zap.AddCallerSkip(options.callerSkip)
 		zOpts = append(zOpts, callerSkip)
+	}
+
+	if options.stackTraceLevel.Enabled(options.level.Level()) {
+		stackTrace := zap.AddStacktrace(options.stackTraceLevel.Level())
+		zOpts = append(zOpts, stackTrace)
 	}
 
 	// 日志采样
