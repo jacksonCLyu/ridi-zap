@@ -21,7 +21,7 @@ type options struct {
 	isCompress             bool
 	isSampling             bool
 	logRotate              bool
-	delay                  time.Duration
+	logRotateInitialDelay  time.Duration
 	logRotateCycleDuration time.Duration
 	fileName               string
 	maxSize                int
@@ -124,12 +124,12 @@ func LogRotate(is bool) Option {
 	})
 }
 
-// LogRotateInitialDelay return logger with initial delay time.Duration
+// LogRotateInitialDelay return logger with initial logRotateInitialDelay time.Duration
 // if logRotate is true, initialDelay is the time to wait before the first log file rotation.
 // The default is the Duration between time.Now() and the parse time of the time.Now().Hour():59:59.
 func LogRotateInitialDelay(delay time.Duration) Option {
 	return ApplyFunc(func(zapOpts *options) {
-		zapOpts.delay = delay
+		zapOpts.logRotateInitialDelay = delay
 	})
 }
 

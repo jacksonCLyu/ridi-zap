@@ -116,7 +116,7 @@ func ZapLogger(opts ...Option) logger.Logger {
 		isCompress:             true,
 		isSampling:             false,
 		logRotate:              true,
-		delay:                  -1,
+		logRotateInitialDelay:  -1,
 		logRotateCycleDuration: -1,
 		fileName:               "",
 		maxSize:                LogMaxSize,
@@ -154,12 +154,12 @@ func ZapLogger(opts ...Option) logger.Logger {
 			options.maxSize = 0
 		}
 		// 默认按照小时分割
-		if options.delay == -1 {
+		if options.logRotateInitialDelay == -1 {
 			currentTime := time.Now().Local()
 			if delay, err := GetInitialDelay(currentTime.Hour()+1, 0, 0); err == nil {
-				options.delay = delay
+				options.logRotateInitialDelay = delay
 			} else {
-				options.delay = 0
+				options.logRotateInitialDelay = 0
 			}
 		}
 		if options.logRotateCycleDuration == -1 {
@@ -177,9 +177,9 @@ func ZapLogger(opts ...Option) logger.Logger {
 	}
 
 	core := zapcore.NewCore(
-		encoder,                                                                                    // 输出编码器
+		encoder, // 输出编码器
 		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stderr), zapcore.AddSync(&lumberLogWriter)), // 写入控制台和文件
-		options.level,                                                                              // 允许输出的日志级别
+		options.level, // 允许输出的日志级别
 	)
 
 	// 构造选项
@@ -219,7 +219,7 @@ func ZapLogger(opts ...Option) logger.Logger {
 
 	// 构造日志对象
 	l := zap.New(core, zOpts...)
-	zLogger := &zapLogger{logger: l, delay: options.delay, cycle: options.logRotateCycleDuration}
+	zLogger := &zapLogger{logger: l, delay: options.logRotateInitialDelay, cycle: options.logRotateCycleDuration}
 	if options.logRotate {
 		zLogger.startRotateCycling(&lumberLogWriter)
 	}
@@ -232,6 +232,11 @@ func (z *zapLogger) startRotateCycling(lumberLogger *lumberjack.Logger) {
 	// 启动日志切割
 	go func() {
 		<-delayChan
+		// 初始化延时结束后，立即执行一次
+		if err := lumberLogger.Rotate(); err != nil {
+			z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
+		}
+		// 周期执行
 		for {
 			<-settingTrickChan
 			if err := lumberLogger.Rotate(); err != nil {
@@ -249,11 +254,11 @@ func (z *zapLogger) startRotateCycling(lumberLogger *lumberjack.Logger) {
 	}
 }
 
-// GetInitialDelay returns the initial delay millisecond before the first event is logged.
+// GetInitialDelay returns the initial logRotateInitialDelay millisecond before the first event is logged.
 // hour: hour of the day
 // minute: minute of the hour
 // second: second of the minute
-// return: delay time.Duration of time.Now() and the input parse time.
+// return: logRotateInitialDelay time.Duration of time.Now() and the input parse time.
 //if the input parse time if Before the current time, return the Duration that between the current time and the input parse time add one day.
 func GetInitialDelay(hour int, minute int, second int) (time.Duration, error) {
 	if hour < 0 {
