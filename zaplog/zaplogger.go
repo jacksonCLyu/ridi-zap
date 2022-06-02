@@ -1,8 +1,10 @@
 package zaplog
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +43,8 @@ const (
 	DefaultLogAggregateDir string = "logs"
 	// DefaultLogFileSuffix default suffix string of log file
 	DefaultLogFileSuffix string = "log"
+	// localTimeLayout default time layout of log file
+	localTimeLayout = "2006-01-02 15:04:05"
 )
 
 var _ logger.Logger = (*zapLogger)(nil)
@@ -95,20 +99,29 @@ func (z *zapLogger) Fatalf(format string, args ...any) {
 
 type zapLogger struct {
 	logger *zap.Logger
+	delay  time.Duration
+	cycle  time.Duration
 }
 
 // ZapLogger returns a new zap logger.
 func ZapLogger(opts ...Option) logger.Logger {
 	options := &options{
-		level:           zap.NewAtomicLevel(),
-		refPath:         "app",
-		category:        "app",
-		caller:          true,
-		callerSkip:      1,
-		stackTraceLevel: zap.NewAtomicLevelAt(zap.ErrorLevel),
-		isLocalTime:     true,
-		isCompress:      true,
-		isSampling:      true,
+		level:                  zap.NewAtomicLevel(),
+		refPath:                "app",
+		category:               "app",
+		caller:                 true,
+		callerSkip:             1,
+		stackTraceLevel:        zap.NewAtomicLevelAt(zap.ErrorLevel),
+		isLocalTime:            true,
+		isCompress:             true,
+		isSampling:             false,
+		logRotate:              true,
+		delay:                  -1,
+		logRotateCycleDuration: -1,
+		fileName:               "",
+		maxSize:                LogMaxSize,
+		maxAge:                 LogMaxAge,
+		maxBackups:             LogMaxBackups,
 	}
 	for _, opt := range opts {
 		opt.apply(options)
@@ -125,21 +138,48 @@ func ZapLogger(opts ...Option) logger.Logger {
 	}
 
 	// 日志文件配置
-	fileName := filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.refPath, strings.Join([]string{options.category, DefaultLogFileSuffix}, "."))
+	if options.fileName == "" {
+		options.fileName = filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.refPath, strings.Join([]string{options.category, DefaultLogFileSuffix}, "."))
+	}
+	if !filepath.IsAbs(options.fileName) {
+		if strings.Contains(options.fileName, DefaultLogAggregateDir) {
+			options.fileName = filepath.Join(env.AppRootPath(), options.fileName)
+		} else {
+			options.fileName = filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.fileName)
+		}
+	}
+	if options.logRotate {
+		// 如果切割大小小于100，则重置为默认值，避免因为切割大小过小而导致日志提前切割
+		if options.maxSize < 100 {
+			options.maxSize = 0
+		}
+		// 默认按照小时分割
+		if options.delay == -1 {
+			currentTime := time.Now().Local()
+			if delay, err := GetInitialDelay(currentTime.Hour()+1, 0, 0); err == nil {
+				options.delay = delay
+			} else {
+				options.delay = 0
+			}
+		}
+		if options.logRotateCycleDuration == -1 {
+			options.logRotateCycleDuration = time.Hour
+		}
+	}
 	// 日志切割文档 hook
 	lumberLogWriter := lumberjack.Logger{
-		Filename:   fileName,            // 日志文件路径
-		MaxSize:    LogMaxSize,          // 每个日志文件保存的最大尺寸 单位：M
-		MaxAge:     LogMaxAge,           // 文件最多保存天数
-		MaxBackups: LogMaxBackups,       // 日志文件最多保存备份个数
+		Filename:   options.fileName,    // 日志文件路径
+		MaxSize:    options.maxSize,     // 每个日志文件保存的最大尺寸 单位：M
+		MaxAge:     options.maxAge,      // 文件最多保存天数
+		MaxBackups: options.maxBackups,  // 日志文件最多保存备份个数
 		LocalTime:  options.isLocalTime, // 是否本地时间
 		Compress:   options.isCompress,  // 是否压缩
 	}
 
 	core := zapcore.NewCore(
-		encoder, // 输出编码器
+		encoder,                                                                                    // 输出编码器
 		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stderr), zapcore.AddSync(&lumberLogWriter)), // 写入控制台和文件
-		options.level, // 允许输出的日志级别
+		options.level,                                                                              // 允许输出的日志级别
 	)
 
 	// 构造选项
@@ -179,7 +219,92 @@ func ZapLogger(opts ...Option) logger.Logger {
 
 	// 构造日志对象
 	l := zap.New(core, zOpts...)
-	return &zapLogger{logger: l}
+	zLogger := &zapLogger{logger: l, delay: options.delay, cycle: options.logRotateCycleDuration}
+	if options.logRotate {
+		zLogger.startRotateCycling(&lumberLogWriter)
+	}
+	return zLogger
+}
+
+func (z *zapLogger) startRotateCycling(lumberLogger *lumberjack.Logger) {
+	var delayChan = make(chan struct{})
+	settingTrickChan := time.Tick(z.cycle)
+	// 启动日志切割
+	go func() {
+		<-delayChan
+		for {
+			<-settingTrickChan
+			if err := lumberLogger.Rotate(); err != nil {
+				z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
+			}
+		}
+	}()
+	if z.delay > 0 {
+		go func() {
+			time.Sleep(z.delay)
+			close(delayChan)
+		}()
+	} else {
+		close(delayChan)
+	}
+}
+
+// GetInitialDelay returns the initial delay millisecond before the first event is logged.
+// hour: hour of the day
+// minute: minute of the hour
+// second: second of the minute
+// return: delay time.Duration of time.Now() and the input parse time.
+//if the input parse time if Before the current time, return the Duration that between the current time and the input parse time add one day.
+func GetInitialDelay(hour int, minute int, second int) (time.Duration, error) {
+	if hour < 0 {
+		hour = 0
+	}
+	if hour > 23 {
+		hour = 23
+	}
+	if minute < 0 {
+		minute = 0
+	}
+	if minute > 59 {
+		minute = 59
+	}
+	if second < 0 {
+		second = 0
+	}
+	if second > 59 {
+		second = 59
+	}
+	localTime := time.Now().Local()
+	parseTime, err := time.ParseInLocation(localTimeLayout, getFormatTimeValue(localTime, hour, minute, second), time.Local)
+	if err != nil {
+		return 0, err
+	}
+	if parseTime.Before(localTime) {
+		parseTime = parseTime.AddDate(0, 0, 1)
+	}
+	return parseTime.Sub(localTime), nil
+}
+
+func getFormatTimeValue(localTime time.Time, hour int, minute int, second int) string {
+	minuteStr := strconv.Itoa(minute)
+	secondStr := strconv.Itoa(second)
+	lMonth := localTime.Month()
+	lDay := localTime.Day()
+	if minute < 10 {
+		minuteStr = "0" + minuteStr
+	}
+	if second < 10 {
+		secondStr = "0" + secondStr
+	}
+	lMonthStr := strconv.Itoa(int(lMonth))
+	lDayStr := strconv.Itoa(lDay)
+	if lMonth < 10 {
+		lMonthStr = "0" + lMonthStr
+	}
+	if lDay < 10 {
+		lDayStr = "0" + lDayStr
+	}
+	return fmt.Sprintf("%d-%s-%s %d:%s:%s", localTime.Year(), lMonthStr, lDayStr, hour, minuteStr, secondStr)
 }
 
 // NewCustomStdoutEncoderConfig return a custom zapcore encoder config
