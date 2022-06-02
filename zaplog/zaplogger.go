@@ -178,7 +178,7 @@ func ZapLogger(opts ...Option) logger.Logger {
 
 	core := zapcore.NewCore(
 		encoder, // 输出编码器
-		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stderr), zapcore.AddSync(&lumberLogWriter)), // 写入控制台和文件
+		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(&lumberLogWriter)), // 写入控制台和文件
 		options.level, // 允许输出的日志级别
 	)
 
