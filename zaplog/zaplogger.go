@@ -230,16 +230,12 @@ func (z *zapLogger) startRotateCycling() {
 	go func() {
 		<-z.delayChan
 		// 初始化延时结束后，立即执行一次
-		if err := z.lumberLogger.Rotate(); err != nil {
-			z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
-		}
+		z.LogRotate()
 		// 周期执行
 		settingTrickChan := time.Tick(z.cycle)
 		for {
 			<-settingTrickChan
-			if err := z.lumberLogger.Rotate(); err != nil {
-				z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
-			}
+			z.LogRotate()
 		}
 	}()
 	if z.delay > 0 {
@@ -249,6 +245,22 @@ func (z *zapLogger) startRotateCycling() {
 		}()
 	} else {
 		close(z.delayChan)
+	}
+}
+
+// LogRotate doing logRotate at once
+func (z *zapLogger) LogRotate() {
+	logFileInfo, err := os.Stat(z.lumberLogger.Filename)
+	if err != nil {
+		z.Errorf("get current log fileInfo error: %v\n", err)
+		return
+	}
+	if logFileInfo.Size() == 0 {
+		// No need rotate
+		return
+	}
+	if err := z.lumberLogger.Rotate(); err != nil {
+		z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
 	}
 }
 

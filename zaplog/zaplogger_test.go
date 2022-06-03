@@ -43,6 +43,7 @@ func TestStartRotateCycling(t *testing.T) {
 	} else {
 		t.Log(delay)
 	}
+	// _ = GetLoggerWithOptions("test", LogRotateInitialDelay(delay), LogRotateCycle(time.Second*30))
 	logger := GetLoggerWithOptions("test", LogRotateInitialDelay(delay), LogRotateCycle(time.Second*30))
 	tickerChan := time.Tick(2 * time.Second)
 	go func() {
