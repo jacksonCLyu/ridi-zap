@@ -19,9 +19,9 @@ func NewBudiler() *zapLoggerBuilder {
 }
 
 // ToBuilder returns a new zapLoggerBuilder with the same configuration.
-func (zLogger *zapLogger) ToBuilder() *zapLoggerBuilder {
+func (z *zapLogger) ToBuilder() *zapLoggerBuilder {
 	return &zapLoggerBuilder{
-		zLogger: zLogger,
+		zLogger: z,
 	}
 }
 
@@ -86,7 +86,8 @@ func (builder *zapLoggerBuilder) Build() *zapLogger {
 			zLogger.cycle = time.Hour
 		}
 		// 启动日志切割
-		zLogger.startRotateCycling()
+		go zLogger.startRotateCycling()
+		go zLogger.delayDeliver()
 	}
 	return zLogger
 }

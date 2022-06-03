@@ -227,22 +227,23 @@ func ZapLogger(name string, opts ...Option) logger.Logger {
 }
 
 func (z *zapLogger) startRotateCycling() {
-	go func() {
-		<-z.delayChan
-		// 初始化延时结束后，立即执行一次
+	<-z.delayChan
+	// 初始化延时结束后，立即执行一次
+	z.LogRotate()
+	// 周期执行
+	settingTrickChan := time.Tick(z.cycle)
+	for {
+		<-settingTrickChan
 		z.LogRotate()
-		// 周期执行
-		settingTrickChan := time.Tick(z.cycle)
-		for {
-			<-settingTrickChan
-			z.LogRotate()
-		}
-	}()
+	}
+}
+
+func (z *zapLogger) delayDeliver() {
 	if z.delay > 0 {
-		go func() {
-			time.Sleep(z.delay)
-			close(z.delayChan)
-		}()
+		delayTriggerChan := time.After(z.delay)
+		curTime, _ := <-delayTriggerChan
+		z.Debugf("After initial delay, start log rotate, current time: %v\n", curTime)
+		close(z.delayChan)
 	} else {
 		close(z.delayChan)
 	}
