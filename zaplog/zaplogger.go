@@ -33,11 +33,11 @@ const (
 	LogFormatJSON string = "json"
 
 	// LogMaxSize max size of single log file
-	LogMaxSize int = 10
+	LogMaxSize int = 100
 	// LogMaxAge max save days of log files
-	LogMaxAge int = 28
+	LogMaxAge int = 365
 	// LogMaxBackups max backups of log files
-	LogMaxBackups int = 5
+	LogMaxBackups int = 500
 
 	// DefaultLogAggregateDir default directory of log categories
 	DefaultLogAggregateDir string = "logs"
@@ -98,17 +98,21 @@ func (z *zapLogger) Fatalf(format string, args ...any) {
 }
 
 type zapLogger struct {
-	logger *zap.Logger
-	delay  time.Duration
-	cycle  time.Duration
+	name         string
+	logger       *zap.Logger
+	lumberLogger *lumberjack.Logger
+	rotate       bool
+	delay        time.Duration
+	delayChan    chan struct{}
+	cycle        time.Duration
 }
 
 // ZapLogger returns a new zap logger.
-func ZapLogger(opts ...Option) logger.Logger {
+func ZapLogger(name string, opts ...Option) logger.Logger {
 	options := &options{
 		level:                  zap.NewAtomicLevel(),
-		refPath:                "app",
-		category:               "app",
+		refPath:                name,
+		category:               name,
 		caller:                 true,
 		callerSkip:             1,
 		stackTraceLevel:        zap.NewAtomicLevelAt(zap.ErrorLevel),
@@ -137,49 +141,43 @@ func ZapLogger(opts ...Option) logger.Logger {
 		encoder = zapcore.NewConsoleEncoder(NewCustomProductionEncoderConfig())
 	}
 
-	// 日志文件配置
-	if options.fileName == "" {
-		options.fileName = filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.refPath, strings.Join([]string{options.category, DefaultLogFileSuffix}, "."))
-	}
-	if !filepath.IsAbs(options.fileName) {
-		if strings.Contains(options.fileName, DefaultLogAggregateDir) {
-			options.fileName = filepath.Join(env.AppRootPath(), options.fileName)
-		} else {
-			options.fileName = filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.fileName)
-		}
-	}
+	syncers := make([]zapcore.WriteSyncer, 0, 2)
+	// 默认输出到控制台
+	syncers = append(syncers, zapcore.AddSync(os.Stdout))
+	// 滚动日志
+	var lumberLogger *lumberjack.Logger
 	if options.logRotate {
-		// 如果切割大小小于100，则重置为默认值，避免因为切割大小过小而导致日志提前切割
-		if options.maxSize < 100 {
-			options.maxSize = 0
+		// 日志文件配置
+		if options.fileName == "" {
+			options.fileName = filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.refPath, strings.Join([]string{options.category, DefaultLogFileSuffix}, "."))
 		}
-		// 默认按照小时分割
-		if options.logRotateInitialDelay == -1 {
-			currentTime := time.Now().Local()
-			if delay, err := GetInitialDelay(currentTime.Hour()+1, 0, 0); err == nil {
-				options.logRotateInitialDelay = delay
+		if !filepath.IsAbs(options.fileName) {
+			if strings.Contains(options.fileName, DefaultLogAggregateDir) {
+				options.fileName = filepath.Join(env.AppRootPath(), options.fileName)
 			} else {
-				options.logRotateInitialDelay = 0
+				options.fileName = filepath.Join(env.AppRootPath(), DefaultLogAggregateDir, options.fileName)
 			}
 		}
-		if options.logRotateCycleDuration == -1 {
-			options.logRotateCycleDuration = time.Hour
+		// 如果开启切割大小小于默认值，则重置为默认值
+		if options.maxSize < LogMaxSize {
+			options.maxSize = LogMaxSize
 		}
-	}
-	// 日志切割文档 hook
-	lumberLogWriter := lumberjack.Logger{
-		Filename:   options.fileName,    // 日志文件路径
-		MaxSize:    options.maxSize,     // 每个日志文件保存的最大尺寸 单位：M
-		MaxAge:     options.maxAge,      // 文件最多保存天数
-		MaxBackups: options.maxBackups,  // 日志文件最多保存备份个数
-		LocalTime:  options.isLocalTime, // 是否本地时间
-		Compress:   options.isCompress,  // 是否压缩
+		// 日志切割文档 hook
+		lumberLogger = &lumberjack.Logger{
+			Filename:   options.fileName,    // 日志文件路径
+			MaxSize:    options.maxSize,     // 每个日志文件保存的最大尺寸 单位：M
+			MaxAge:     options.maxAge,      // 文件最多保存天数
+			MaxBackups: options.maxBackups,  // 日志文件最多保存备份个数
+			LocalTime:  options.isLocalTime, // 是否本地时间
+			Compress:   options.isCompress,  // 是否压缩
+		}
+		syncers = append(syncers, zapcore.AddSync(lumberLogger))
 	}
 
 	core := zapcore.NewCore(
-		encoder, // 输出编码器
-		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(&lumberLogWriter)), // 写入控制台和文件
-		options.level, // 允许输出的日志级别
+		encoder,                                 // 输出编码器
+		zapcore.NewMultiWriteSyncer(syncers...), // 写入控制台和文件
+		options.level,                           // 允许输出的日志级别
 	)
 
 	// 构造选项
@@ -219,27 +217,27 @@ func ZapLogger(opts ...Option) logger.Logger {
 
 	// 构造日志对象
 	l := zap.New(core, zOpts...)
-	zLogger := &zapLogger{logger: l, delay: options.logRotateInitialDelay, cycle: options.logRotateCycleDuration}
-	if options.logRotate {
-		zLogger.startRotateCycling(&lumberLogWriter)
-	}
-	return zLogger
+	return NewBudiler().
+		Name(name).
+		ZapLogger(l).
+		Rotate(options.logRotate).
+		LumberLogger(lumberLogger).
+		Delay(options.logRotateInitialDelay).
+		Cycle(options.logRotateCycleDuration).Build()
 }
 
-func (z *zapLogger) startRotateCycling(lumberLogger *lumberjack.Logger) {
-	var delayChan = make(chan struct{})
-	settingTrickChan := time.Tick(z.cycle)
-	// 启动日志切割
+func (z *zapLogger) startRotateCycling() {
 	go func() {
-		<-delayChan
+		<-z.delayChan
 		// 初始化延时结束后，立即执行一次
-		if err := lumberLogger.Rotate(); err != nil {
+		if err := z.lumberLogger.Rotate(); err != nil {
 			z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
 		}
 		// 周期执行
+		settingTrickChan := time.Tick(z.cycle)
 		for {
 			<-settingTrickChan
-			if err := lumberLogger.Rotate(); err != nil {
+			if err := z.lumberLogger.Rotate(); err != nil {
 				z.Errorf("log rotate logRotateCycleDuration error: %v\n", err)
 			}
 		}
@@ -247,47 +245,11 @@ func (z *zapLogger) startRotateCycling(lumberLogger *lumberjack.Logger) {
 	if z.delay > 0 {
 		go func() {
 			time.Sleep(z.delay)
-			close(delayChan)
+			close(z.delayChan)
 		}()
 	} else {
-		close(delayChan)
+		close(z.delayChan)
 	}
-}
-
-// GetInitialDelay returns the initial logRotateInitialDelay millisecond before the first event is logged.
-// hour: hour of the day
-// minute: minute of the hour
-// second: second of the minute
-// return: logRotateInitialDelay time.Duration of time.Now() and the input parse time.
-//if the input parse time if Before the current time, return the Duration that between the current time and the input parse time add one day.
-func GetInitialDelay(hour int, minute int, second int) (time.Duration, error) {
-	if hour < 0 {
-		hour = 0
-	}
-	if hour > 23 {
-		hour = 23
-	}
-	if minute < 0 {
-		minute = 0
-	}
-	if minute > 59 {
-		minute = 59
-	}
-	if second < 0 {
-		second = 0
-	}
-	if second > 59 {
-		second = 59
-	}
-	localTime := time.Now().Local()
-	parseTime, err := time.ParseInLocation(localTimeLayout, getFormatTimeValue(localTime, hour, minute, second), time.Local)
-	if err != nil {
-		return 0, err
-	}
-	if parseTime.Before(localTime) {
-		parseTime = parseTime.AddDate(0, 0, 1)
-	}
-	return parseTime.Sub(localTime), nil
 }
 
 func getFormatTimeValue(localTime time.Time, hour int, minute int, second int) string {

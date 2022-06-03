@@ -1,8 +1,9 @@
 package zaplog
 
 import (
-	"go.uber.org/zap"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Option zap logger option interface
@@ -43,14 +44,14 @@ func WithLevel(level zap.AtomicLevel) Option {
 	})
 }
 
-// WithRefPath return logger with the given ref path default is "app"
+// WithRefPath return logger with the given ref path
 func WithRefPath(logRefPath string) Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.refPath = logRefPath
 	})
 }
 
-// WithCategory return logger with category default is "app"
+// WithCategory return logger with category
 func WithCategory(category string) Option {
 	return ApplyFunc(func(zapOpts *options) {
 		zapOpts.category = category
