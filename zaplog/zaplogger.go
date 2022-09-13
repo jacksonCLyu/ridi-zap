@@ -290,37 +290,39 @@ func getFormatTimeValue(localTime time.Time, hour int, minute int, second int) s
 // NewCustomStdoutEncoderConfig return a custom zapcore encoder config
 func NewCustomStdoutEncoderConfig() zapcore.EncoderConfig {
 	return zapcore.EncoderConfig{
-		MessageKey:     MessageKey,
-		LevelKey:       LevelKey,
-		TimeKey:        TimeKey,
-		NameKey:        NameKey,
-		CallerKey:      CallerKey,
-		FunctionKey:    zapcore.OmitKey,
-		StacktraceKey:  StacktraceKey,
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalColorLevelEncoder, // 大写编码器
-		EncodeTime:     zapcore.ISO8601TimeEncoder,       // ISO8601 UTC 时间格式
-		EncodeDuration: zapcore.SecondsDurationEncoder,   // second duration encoder
-		EncodeCaller:   zapcore.ShortCallerEncoder,       // 短路径编码器(相对路径 + 行号)
-		EncodeName:     zapcore.FullNameEncoder,
+		MessageKey:       MessageKey,
+		LevelKey:         LevelKey,
+		TimeKey:          TimeKey,
+		NameKey:          NameKey,
+		CallerKey:        CallerKey,
+		FunctionKey:      zapcore.OmitKey,
+		StacktraceKey:    StacktraceKey,
+		LineEnding:       zapcore.DefaultLineEnding,
+		EncodeLevel:      zapcore.CapitalColorLevelEncoder, // 大写编码器
+		EncodeTime:       zapcore.ISO8601TimeEncoder,       // ISO8601 UTC 时间格式
+		EncodeDuration:   zapcore.SecondsDurationEncoder,   // second duration encoder
+		EncodeCaller:     zapcore.ShortCallerEncoder,       // 短路径编码器(相对路径 + 行号)
+		EncodeName:       zapcore.FullNameEncoder,
+		ConsoleSeparator: " | ",
 	}
 }
 
 // NewCustomProductionEncoderConfig return a custom zapcore encoder config
 func NewCustomProductionEncoderConfig() zapcore.EncoderConfig {
 	return zapcore.EncoderConfig{
-		MessageKey:     MessageKey,
-		LevelKey:       LevelKey,
-		TimeKey:        TimeKey,
-		NameKey:        NameKey,
-		CallerKey:      CallerKey,
-		FunctionKey:    zapcore.OmitKey,
-		StacktraceKey:  StacktraceKey,
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalColorLevelEncoder, // 大写编码器
-		EncodeTime:     zapcore.ISO8601TimeEncoder,       // ISO8601 UTC 时间格式
-		EncodeDuration: zapcore.SecondsDurationEncoder,   // second duration encoder
-		EncodeCaller:   zapcore.ShortCallerEncoder,       // 短路径编码器(相对路径 + 行号)
-		EncodeName:     zapcore.FullNameEncoder,
+		MessageKey:       MessageKey,
+		LevelKey:         LevelKey,
+		TimeKey:          TimeKey,
+		NameKey:          NameKey,
+		CallerKey:        CallerKey,
+		FunctionKey:      zapcore.OmitKey,
+		StacktraceKey:    StacktraceKey,
+		LineEnding:       zapcore.DefaultLineEnding,
+		EncodeLevel:      zapcore.CapitalLevelEncoder,    // 大写编码器
+		EncodeTime:       zapcore.ISO8601TimeEncoder,     // ISO8601 UTC 时间格式
+		EncodeDuration:   zapcore.SecondsDurationEncoder, // second duration encoder
+		EncodeCaller:     zapcore.ShortCallerEncoder,     // 短路径编码器(相对路径 + 行号)
+		EncodeName:       zapcore.FullNameEncoder,
+		ConsoleSeparator: " | ",
 	}
 }
